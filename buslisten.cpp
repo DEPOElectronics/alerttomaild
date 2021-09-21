@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 
+
 int callback_error = 0;
 
 using namespace std;
@@ -125,8 +126,6 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		const char *intf;
 		Res(sd_bus_message_read_basic(m, SD_BUS_TYPE_STRING, &intf),
 				"Read intf");
-
-
 		if (strcmp(intf, "xyz.openbmc_project.Logging.Entry") == 0)
 		{
 			LogEntry(m, Id, Timestamp, Severity, Message, AdditionalData);
@@ -193,7 +192,7 @@ void RunMonitor()
 
 int BusListen(const char *SendTo, const char *SendMail, const char *PostMail)
 {
-	RunMonitor();
+	//RunMonitor();
 	//Settings
 	FSendTo = strdup(SendTo);
 	FSendMail = strdup(SendMail);

@@ -21,6 +21,7 @@ bool Daemon = false;
 char* SendTo;
 char* SendMail=strdup("msmtp-enqueue.sh");
 char* PostMail=strdup("msmtp-runqueue.sh");
+char* PID_FILE=strdup("/var/run/alerttomaild.pid");
 
 
 int LoadConf(const char *Conf)
@@ -63,6 +64,12 @@ int LoadConf(const char *Conf)
 		if (SetPostMail!=NULL)
 		{
 			PostMail=strdup(SetPostMail);
+		}
+
+		char* SetPIDFILE=xget_value(vals, "PID");
+		if (SetPIDFILE!=NULL)
+		{
+			PID_FILE=strdup(SetPIDFILE);
 		}
 		free(vals);
 	}
@@ -127,7 +134,7 @@ int main(int argc, char **argv)
 	if (Daemon)
 	{
 		printf("Run as daemon\n");
-		if (SetDaemon(0) != EXIT_SUCCESS)
+		if (SetDaemon(0, PID_FILE) != EXIT_SUCCESS)
 		{
 			return EXIT_FAILURE;
 		}
@@ -137,119 +144,3 @@ int main(int argc, char **argv)
 
 	return EXIT_SUCCESS;
 }
-
-/*int MonitorProc()
-{
-    int      pid;
-    int      status;
-    int      need_start = 1;
-    sigset_t sigset;
-    siginfo_t siginfo;
-
-    // настраиваем сигналы которые будем обрабатывать
-    sigemptyset(&sigset);
-
-    // сигнал остановки процесса пользователем
-    sigaddset(&sigset, SIGQUIT);
-
-    // сигнал для остановки процесса пользователем с терминала
-    sigaddset(&sigset, SIGINT);
-
-    // сигнал запроса завершения процесса
-    sigaddset(&sigset, SIGTERM);
-
-    // сигнал посылаемый при изменении статуса дочернего процесса
-    sigaddset(&sigset, SIGCHLD);
-
-    // пользовательский сигнал который мы будем использовать для обновления конфига
-    sigaddset(&sigset, SIGUSR1);
-    sigprocmask(SIG_BLOCK, &sigset, NULL);
-
-    // данная функция создаст файл с нашим PID'ом
-    SetPidFile(PID_FILE);
-
-    // бесконечный цикл работы
-    for (;;)
-    {
-        // если необходимо создать потомка
-        if (need_start)
-        {
-            // создаём потомка
-            pid = fork();
-        }
-
-        need_start = 1;
-
-        if (pid == -1) // если произошла ошибка
-        {
-            // запишем в лог сообщение об этом
-            WriteLog("[MONITOR] Fork failed (%s)\n", strerror(errno));
-        }
-        else if (!pid) // если мы потомок
-        {
-            // данный код выполняется в потомке
-
-            // запустим функцию отвечающую за работу демона
-            status = WorkProc();
-
-            // завершим процесс
-            exit(status);
-        }
-        else // если мы родитель
-        {
-            // данный код выполняется в родителе
-
-            // ожидаем поступление сигнала
-            sigwaitinfo(&sigset, &siginfo);
-
-            // если пришел сигнал от потомка
-            if (siginfo.si_signo == SIGCHLD)
-            {
-                // получаем статус завершение
-                wait(&status);
-
-                // преобразуем статус в нормальный вид
-                status = WEXITSTATUS(status);
-
-                 // если потомок завершил работу с кодом говорящем о том, что нет нужды дальше работать
-                if (status == CHILD_NEED_TERMINATE)
-                {
-                    // запишем в лог сообщени об этом
-                    WriteLog("[MONITOR] Child stopped\n");
-
-                    // прервем цикл
-                    break;
-                }
-                else if (status == CHILD_NEED_WORK) // если требуется перезапустить потомка
-                {
-                    // запишем в лог данное событие
-                    WriteLog("[MONITOR] Child restart\n");
-                }
-            }
-            else if (siginfo.si_signo == SIGUSR1) // если пришел сигнал что необходимо перезагрузить конфиг
-            {
-                kill(pid, SIGUSR1); // перешлем его потомку
-                need_start = 0; // установим флаг что нам не надо запускать потомка заново
-            }
-            else // если пришел какой-либо другой ожидаемый сигнал
-            {
-                // запишем в лог информацию о пришедшем сигнале
-                WriteLog("[MONITOR] Signal %s\n", strsignal(siginfo.si_signo));
-
-                // убьем потомка
-                kill(pid, SIGTERM);
-                status = 0;
-                break;
-            }
-        }
-    }
-
-    // запишем в лог, что мы остановились
-    WriteLog("[MONITOR] Stop\n");
-
-    // удалим файл с PID'ом
-    unlink(PID_FILE);
-
-    return status;
-}
-*/

@@ -24,60 +24,61 @@
 #include <string.h>
 #include <fstream>
 
-const char* PID_FILE=strdup("/var/run/alerttomaild.pid");
-
-void SetPidFile(const char* Filename)
+void SetPidFile(const char *Filename)
 {
-    FILE* f;
+	if (Filename != NULL)
+	{
+		FILE *f;
 
-    f = fopen(Filename, "w+");
-    if (f)
-    {
-        fprintf(f, "%u", getpid());
-        fclose(f);
-    }
+		f = fopen(Filename, "w+");
+		if (f)
+		{
+			fprintf(f, "%u", getpid());
+			fclose(f);
+		}
+	}
 }
 
-void WriteLog(const char* msg, char* err)
-{
-
-}
-
-int /* Returns 0 on success, -1 on error */
-SetDaemon(int flags)
+int SetDaemon(int flags, const char *PID_FILE) /* Returns 0 on success, -1 on error */
 {
 	int maxfd, fd;
 
 	switch (fork())
-	{ /* Become background process */
+	{
 	case -1:
-		return -1;
-	case 0:
-		break; /* Child falls through... */
-	default:
-		_exit(EXIT_SUCCESS); /* while parent terminates */
-	}
-
-	if (setsid() == -1) /* Become leader of new session */
-		return -1;
-
-	int pid = fork();
-	if (pid== -1)
-	{ /* Ensure we are not session leader */
+	{
 		return EXIT_FAILURE;
 	}
+	case 0:
+	{
+		break;
+	}
+	default:
+	{
+		_exit(EXIT_SUCCESS);
+	}
+	}
+
+	if (setsid() == -1)
+		return -1;
+
+	/*int pid = fork();
+	if (pid == -1)
+	{  Ensure we are not session leader
+		return EXIT_FAILURE;
+	}*/
 
 	if (!(flags & BD_NO_UMASK0))
 		umask(0); /* Clear file mode creation mask */
 
 	if (!(flags & BD_NO_CHDIR))
-	 {
-	  int r=chdir("/");                     // Change to root directory
-	  if (r!=0)
-	  {
-		  return EXIT_FAILURE;
-	  }
-	 }
+	{
+		int r = chdir("/");                     // Change to root directory
+		if (r != 0)
+		{
+			return EXIT_FAILURE;
+		}
+	}
 
 	if (!(flags & BD_NO_CLOSE_FILES))
 	{ /* Close all open files */
@@ -102,6 +103,8 @@ SetDaemon(int flags)
 		if (dup2(STDIN_FILENO, STDERR_FILENO) != STDERR_FILENO)
 			return -1;
 	}
+	// данная функция создаст файл с нашим PID'ом
+	SetPidFile(PID_FILE);
 
 	//int status = MonitorProc();
 	return 0;
