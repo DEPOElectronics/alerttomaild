@@ -1,0 +1,17 @@
+[Unit]
+Description=Sending Alerts by Email
+After=dbus.service
+After=systemd-networkd.service
+
+[Service]
+Type=forking
+PIDFile=/var/run/alerttomaild.pid
+OOMScoreAdjust=-100
+
+Restart=always
+ExecStart=/usr/bin/alerttomaild -D
+SyslogIdentifier=alerttomaild
+
+[Install]
+WantedBy=multi-user.target
+
