@@ -9,7 +9,6 @@
 #include <iostream>
 #include <sstream>
 
-
 int callback_error = 0;
 
 using namespace std;
@@ -17,6 +16,13 @@ using namespace std;
 const char *FSendTo;
 const char *FSendMail;
 const char *FPostMail;
+
+const char *match =
+		strdup(
+				"type='signal',path=/xyz/openbmc_project/logging,member=InterfacesAdded");
+
+const char *ENTRY = strdup("xyz.openbmc_project.Logging.Entry");
+const char *FILEPATH = strdup("xyz.openbmc_project.Common.FilePath");
 
 string GetMailText(string SendTo, uint32_t Id, uint64_t Timestamp,
 		const char *Severity, const char *Message, string AdditionalData)
@@ -46,7 +52,7 @@ int Res(const int r, const char *s)
 	return r;
 }
 
-void LogEntry(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
+int LogEntry(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		const char **Severity, const char **Message, string *AdditionalData)
 {
 	// read a{sv}
@@ -108,6 +114,7 @@ void LogEntry(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		Res(sd_bus_message_exit_container(m), "Exit subarray"); // array
 	}
 	Res(sd_bus_message_exit_container(m), "Exit subarray"); // array
+	return 0;
 }
 
 int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
@@ -115,6 +122,8 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 {
 	// oa{sa{sv}}
 	int r;
+	int Result = -1;
+	bool Allow = true;
 
 	Res(sd_bus_message_skip(m, "o"), "Read path");
 	Res(sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sa{sv}}"),
@@ -126,13 +135,37 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		const char *intf;
 		Res(sd_bus_message_read_basic(m, SD_BUS_TYPE_STRING, &intf),
 				"Read intf");
-		if (strcmp(intf, "xyz.openbmc_project.Logging.Entry") == 0)
+		printf("intf=%s\n", intf);
+		if (strcmp(intf, ENTRY) == 0)
 		{
-			LogEntry(m, Id, Timestamp, Severity, Message, AdditionalData);
+			Result = LogEntry(m, Id, Timestamp, Severity, Message,
+					AdditionalData);
 		}
 		else
 		{
-			Res(sd_bus_message_skip(m, "a{sv}"), "Skip array");
+			printf("intf else\n");
+			if (strcmp(intf, FILEPATH) == 0)
+			{
+				const char *FilePath;
+				printf("Read FilePath\n");
+				Res(sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}"), "FP_ENTER_ARRAY");
+				Res(sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv"), "FP_ENTER_DICT");
+				Res(sd_bus_message_skip(m, "s"),"FP_skip_s");
+				Res(sd_bus_message_read(m, "v", "s", &FilePath), "FP_read_variant");
+				printf("FilePath=%s\n", FilePath);
+				if (strlen(FilePath) != 0)
+				{
+					printf("not Allow\n");
+					Allow = false;
+				}
+				sd_bus_message_exit_container(m);
+				sd_bus_message_exit_container(m);
+			}
+			else
+			{
+				Res(sd_bus_message_skip(m, "a{sv}"), "Skip array");
+			}
+
 		}
 		Res(sd_bus_message_exit_container(m), "Exit dict"); // dict
 	}
@@ -142,7 +175,15 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 	{
 		printf("r=%s\n", strerror(-r));
 	}
-	return 0;
+
+	if (Allow)
+	{
+		return Result;
+	}
+	else
+	{
+		return EXIT_FAILURE;
+	}
 }
 
 int SendMail(string SendTo, const char *program, string TxT)
@@ -168,23 +209,28 @@ static int callback(sd_bus_message *m, void *user, sd_bus_error *error)
 	const char *Severity;
 	const char *Message;
 	string AdditionalData = "";
-	GetEventInfo(m, &Id, &Timestamp, &Severity, &Message, &AdditionalData);
-	string TxT = GetMailText(FSendTo, Id, Timestamp, Severity, Message,
-			AdditionalData);
-	SendMail(FSendTo, FSendMail, TxT);
-	if (FPostMail != NULL)
+	if (GetEventInfo(m, &Id, &Timestamp, &Severity, &Message, &AdditionalData)
+			== 0)
 	{
-		PostMail(FPostMail);
+		string TxT = GetMailText(FSendTo, Id, Timestamp, Severity, Message,
+				AdditionalData);
+		SendMail(FSendTo, FSendMail, TxT);
+		if (FPostMail != NULL)
+		{
+			PostMail(FPostMail);
+		}
 	}
 
-//    callback_count++;
+	//callback_error++;
 	return 0;
 }
 
 void RunMonitor()
 {
-	int r=system("dbus-monitor --system ""type='signal',path=/xyz/openbmc_project/logging,member=InterfacesAdded"" > /home/root/monitor &");
-	if (r<0)
+	int r =
+			system(
+					"dbus-monitor --system " "type='signal',path=/xyz/openbmc_project/logging,member=InterfacesAdded" " > /home/root/monitor &");
+	if (r < 0)
 	{
 		printf("fail run monitor");
 	}
@@ -199,10 +245,8 @@ int BusListen(const char *SendTo, const char *SendMail, const char *PostMail)
 	FPostMail = strdup(PostMail);
 	sd_bus *conn = NULL;
 	sd_bus_slot *slot = NULL;
-	static const size_t LEN = 256;
+
 	// Action signal add  //oa{sa{sv}}
-	const char match[LEN] =
-			"type='signal',path=/xyz/openbmc_project/logging,member=InterfacesAdded";
 	sd_event *loop = NULL;
 	int r = 0;
 
