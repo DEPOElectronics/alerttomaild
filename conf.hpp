@@ -20,5 +20,4 @@ typedef  struct _value {
 int  xopen_ini(const char* filename, xvalue* arr);
 char* xget_value(xvalue *vals, const char *key);
 
-
 #endif /* CONF_HPP_ */

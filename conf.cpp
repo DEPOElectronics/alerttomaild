@@ -2,9 +2,7 @@
 #include <string.h>
 #include <conf.hpp>
 
-int xset_value(xvalue *vals, const char *key, const char *val);
 int xopen_ini(const char *filename, xvalue *arr);
-int xsave_ini(const char *filename, xvalue *arr);
 
 // получения значения по указанному ключу с учётом регистра
 char* xget_value(xvalue *vals, const char *key)
