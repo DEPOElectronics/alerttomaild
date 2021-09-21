@@ -30,3 +30,6 @@
 *.exe
 *.out
 *.app
+/alerttomail.conf
+/build/
+/reimu.build/
