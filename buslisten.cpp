@@ -126,6 +126,7 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		Res(sd_bus_message_read_basic(m, SD_BUS_TYPE_STRING, &intf),
 				"Read intf");
 
+
 		if (strcmp(intf, "xyz.openbmc_project.Logging.Entry") == 0)
 		{
 			LogEntry(m, Id, Timestamp, Severity, Message, AdditionalData);
@@ -181,15 +182,22 @@ static int callback(sd_bus_message *m, void *user, sd_bus_error *error)
 	return 0;
 }
 
+void RunMonitor()
+{
+	int r=system("dbus-monitor --system ""type='signal',path=/xyz/openbmc_project/logging,member=InterfacesAdded"" > /home/root/monitor &");
+	if (r<0)
+	{
+		printf("fail run monitor");
+	}
+}
+
 int BusListen(const char *SendTo, const char *SendMail, const char *PostMail)
 {
+	RunMonitor();
+	//Settings
 	FSendTo = strdup(SendTo);
 	FSendMail = strdup(SendMail);
 	FPostMail = strdup(PostMail);
-
-	printf("Alert will send over %s and %s to %s\n", FSendMail, FPostMail,
-			FSendTo);
-
 	sd_bus *conn = NULL;
 	sd_bus_slot *slot = NULL;
 	static const size_t LEN = 256;
@@ -247,4 +255,3 @@ int BusListen(const char *SendTo, const char *SendMail, const char *PostMail)
 	sd_bus_unref(conn);
 	return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
-
