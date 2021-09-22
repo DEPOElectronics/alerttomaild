@@ -33,3 +33,6 @@
 /alerttomail.conf
 /build/
 /reimu.build/
+/alerttomaild.conf
+/.project
+/.cproject
