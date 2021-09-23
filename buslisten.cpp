@@ -8,14 +8,18 @@
 #include <buslisten.hpp>
 #include <iostream>
 #include <sstream>
+#include <unistd.h>
+#include <regex>
 
-int callback_error = 0;
+bool runstop = false;
 
 using namespace std;
 
 const char *FSendTo;
 const char *FSendMail;
 const char *FPostMail;
+bool FTestRun;
+bool FColorMail=false;
 
 const char *match =
 		strdup(
@@ -24,11 +28,105 @@ const char *match =
 const char *ENTRY = strdup("xyz.openbmc_project.Logging.Entry");
 const char *FILEPATH = strdup("xyz.openbmc_project.Common.FilePath");
 
+enum TSeverity
+{
+	TS_None,
+	TS_Emergency,
+	TS_Alert,
+	TS_Critical,
+	TS_Error,
+	TS_Warning,
+	TS_Notice,
+	TS_Informational,
+	TS_Debug
+};
+
+char* HostName()
+{
+	const size_t LEN = 255;
+	char buffer[LEN] = "";
+	if (gethostname(buffer, LEN) == 0)
+	{
+		return strdup(buffer);
+	}
+	else
+	{
+		return strdup("");
+	}
+}
+
+string LastWord(std::string s)
+{
+	std::smatch m;
+	std::regex e("([^.]+$)");   // matches words beginning by "sub"
+
+	if (std::regex_search(s, m, e))
+	{
+		return m.str();
+	}
+	else
+	{
+		return "";
+	}
+}
+
+TSeverity GetSeverity(string sSeverity)
+{
+	static std::unordered_map<std::string, TSeverity> const table =
+	{
+	{ "Emergency", TS_Emergency },
+	{ "Alert", TS_Alert },
+	{ "Critical", TS_Critical },
+	{ "Error", TS_Error },
+	{ "Warning", TS_Warning },
+	{ "Notice", TS_Notice },
+	{ "Informational", TS_Informational },
+	{ "Debug", TS_Debug } };
+	auto it = table.find(sSeverity);
+	if (it != table.end())
+	{
+		return it->second;
+	}
+	else
+	{
+		return TS_None;
+	}
+
+}
+
+string GetCharState(TSeverity Severity)
+{
+	if (FColorMail)
+	{
+		switch (Severity)
+		{
+		case TS_Emergency:
+		case TS_Alert:
+		case TS_Critical:
+			return "⚫";
+		case TS_Error:
+			return "🔴";
+		case TS_Warning:
+			return "🟠";
+		case TS_Notice:
+		case TS_Informational:
+		case TS_Debug:
+			return "🟢";
+		default:;
+		}
+	}
+	return "";
+}
+
 string GetMailText(string SendTo, uint32_t Id, uint64_t Timestamp,
 		const char *Severity, const char *Message, string AdditionalData)
 {
 	stringstream Res;
-	Res << "Subject: BMC\n";
+	string ShSeverity = LastWord(Severity);
+	TSeverity SevState = GetSeverity(ShSeverity);
+	string CharState=GetCharState(SevState);
+	Res << "Subject: "<<CharState<<" BMC " << HostName() <<" "<< ShSeverity
+			<< "\n";
 	Res << "To: " << SendTo << "\n";
 	Res << "Content-Type: text/plain; charset="
 			"utf-8"
@@ -55,7 +153,7 @@ int Res(const int r, const char *s)
 int LogEntry(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		const char **Severity, const char **Message, string *AdditionalData)
 {
-	// read a{sv}
+// read a{sv}
 	string spropname;
 
 	Res(sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}"),
@@ -120,7 +218,7 @@ int LogEntry(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		const char **Severity, const char **Message, string *AdditionalData)
 {
-	// oa{sa{sv}}
+// oa{sa{sv}}
 	int r;
 	int Result = -1;
 	bool Allow = true;
@@ -148,10 +246,15 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 			{
 				const char *FilePath;
 				printf("Read FilePath\n");
-				Res(sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}"), "FP_ENTER_ARRAY");
-				Res(sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv"), "FP_ENTER_DICT");
-				Res(sd_bus_message_skip(m, "s"),"FP_skip_s");
-				Res(sd_bus_message_read(m, "v", "s", &FilePath), "FP_read_variant");
+				Res(
+						sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY,
+								"{sv}"), "FP_ENTER_ARRAY");
+				Res(
+						sd_bus_message_enter_container(m,
+								SD_BUS_TYPE_DICT_ENTRY, "sv"), "FP_ENTER_DICT");
+				Res(sd_bus_message_skip(m, "s"), "FP_skip_s");
+				Res(sd_bus_message_read(m, "v", "s", &FilePath),
+						"FP_read_variant");
 				printf("FilePath=%s\n", FilePath);
 				if (strlen(FilePath) != 0)
 				{
@@ -198,7 +301,10 @@ int PostMail(const char *RunScript)
 {
 	string FullRun;
 	FullRun = RunScript;
-	FullRun = FullRun + " &";
+	if (!FTestRun)
+	{
+		FullRun = FullRun + " &";
+	}
 	return system(FullRun.c_str());
 }
 
@@ -221,7 +327,11 @@ static int callback(sd_bus_message *m, void *user, sd_bus_error *error)
 		}
 	}
 
-	//callback_error++;
+	if (FTestRun)
+	{
+		runstop = true;
+	}
+//runstop++;
 	return 0;
 }
 
@@ -236,17 +346,21 @@ void RunMonitor()
 	}
 }
 
-int BusListen(const char *SendTo, const char *SendMail, const char *PostMail)
+int BusListen(const char *SendTo, const char *SendMail, const char *PostMail,
+		bool ColorMail,
+		bool TestRun)
 {
-	//RunMonitor();
-	//Settings
+//RunMonitor();
+//Settings
 	FSendTo = strdup(SendTo);
 	FSendMail = strdup(SendMail);
 	FPostMail = strdup(PostMail);
+	FColorMail=ColorMail;
+	FTestRun = TestRun;
 	sd_bus *conn = NULL;
 	sd_bus_slot *slot = NULL;
 
-	// Action signal add  //oa{sa{sv}}
+// Action signal add  //oa{sa{sv}}
 	sd_event *loop = NULL;
 	int r = 0;
 
@@ -276,7 +390,7 @@ int BusListen(const char *SendTo, const char *SendMail, const char *PostMail)
 			continue;
 		}
 
-		if (callback_error > 0)
+		if (runstop > 0)
 		{
 			goto finish;
 		}
@@ -287,9 +401,8 @@ int BusListen(const char *SendTo, const char *SendMail, const char *PostMail)
 			fprintf(stderr, "Failed to wait on bus: %s\n", strerror(-r));
 			goto finish;
 		}
-		if (callback_error != 0)
+		if (runstop)
 		{
-			r = callback_error;
 			goto finish;
 		}
 	}

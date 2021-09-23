@@ -6,6 +6,7 @@
 #include <conf.hpp>
 #include <daemon.hpp>
 #include <buslisten.hpp>
+#include <sstream>
 
 using namespace std;
 #define RESERROR -1
@@ -22,7 +23,16 @@ char* SendTo;
 char* SendMail=strdup("msmtp-enqueue.sh");
 char* PostMail=strdup("msmtp-runqueue.sh");
 char* PID_FILE=strdup("/var/run/alerttomaild.pid");
+bool ColorMail=false;
+bool TestRun=false;
 
+bool strtobool(std::string str) {
+    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+    std::istringstream is(str);
+    bool b;
+    is >> std::boolalpha >> b;
+    return b;
+}
 
 int LoadConf(const char *Conf)
 {
@@ -71,6 +81,13 @@ int LoadConf(const char *Conf)
 		{
 			PID_FILE=strdup(SetPIDFILE);
 		}
+
+		char* SetColor=xget_value(vals, "ColorMail");
+		if (SetColor!=NULL)
+		{
+		    ColorMail=strtobool(SetColor);
+		}
+
 		free(vals);
 	}
 
@@ -90,10 +107,11 @@ int ReadParam(int argc, char **argv)
 	{ "daemon", no_argument, nullptr, 'D' },
 	{ "help", no_argument, nullptr, 'H' },
 	{ "config", required_argument, nullptr, 'C' },
+	{ "test", no_argument, nullptr, 'T'},
 	{ 0, 0, 0, 0 } };
 	int c;
 
-	while ((c = getopt_long(argc, argv, "DC:H", long_opt, &optIdx)) >= 0)
+	while ((c = getopt_long(argc, argv, "DC:HT", long_opt, &optIdx)) >= 0)
 	{
 		switch (c)
 		{
@@ -109,6 +127,10 @@ int ReadParam(int argc, char **argv)
 		case 'H':
 			WriteHelp();
 			_Exit(0);
+			break;
+
+		case 'T':
+			TestRun=true;
 			break;
 
 		default:
@@ -140,7 +162,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	BusListen(SendTo, SendMail, PostMail);
+	BusListen(SendTo, SendMail, PostMail, ColorMail, TestRun);
 
 	return EXIT_SUCCESS;
 }

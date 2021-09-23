@@ -10,8 +10,7 @@
 
 #include <sdbusplus/bus/match.hpp>
 
-int BusListen(const char*, const char* SendMail, const char* PostMail);
-
-
+int BusListen(const char*, const char *SendMail, const char *PostMail,
+		bool ColorMail, bool TestRun);
 
 #endif /* BUS_HPP_ */
