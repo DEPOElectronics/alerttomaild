@@ -19,7 +19,7 @@ const char *FSendTo;
 const char *FSendMail;
 const char *FPostMail;
 bool FTestRun;
-bool FColorMail=false;
+bool FColorMail = false;
 
 const char *match =
 		strdup(
@@ -103,7 +103,6 @@ string GetCharState(TSeverity Severity)
 		case TS_Emergency:
 		case TS_Alert:
 		case TS_Critical:
-			return "⚫";
 		case TS_Error:
 			return "🔴";
 		case TS_Warning:
@@ -112,10 +111,26 @@ string GetCharState(TSeverity Severity)
 		case TS_Informational:
 		case TS_Debug:
 			return "🟢";
-		default:;
+		default:
+			;
 		}
 	}
 	return "";
+}
+
+string TimeStampToString(uint64_t TimeStamp)
+{
+	time_t rawtime = TimeStamp / 1000;
+	tm *timestruct = localtime((&rawtime));
+	char arcString[32];
+	if (strftime(&arcString[0], 20, "%Y-%m-%d %H:%M:%S", timestruct) != 0)
+	{
+		return (char*) &(arcString[0]);
+	}
+	else
+	{
+		return "1970-01-01 00:00:00";
+	}
 }
 
 string GetMailText(string SendTo, uint32_t Id, uint64_t Timestamp,
@@ -124,15 +139,16 @@ string GetMailText(string SendTo, uint32_t Id, uint64_t Timestamp,
 	stringstream Res;
 	string ShSeverity = LastWord(Severity);
 	TSeverity SevState = GetSeverity(ShSeverity);
-	string CharState=GetCharState(SevState);
-	Res << "Subject: "<<CharState<<" BMC " << HostName() <<" "<< ShSeverity
-			<< "\n";
+	string CharState = GetCharState(SevState);
+	Res << "Subject: " << CharState << " BMC " << HostName() << " "
+			<< ShSeverity << "\n";
 	Res << "To: " << SendTo << "\n";
 	Res << "Content-Type: text/plain; charset="
 			"utf-8"
 			"\n";
 	Res << "\r\n";
-	Res << "ID=#" << Id << " Timestamp=" << Timestamp << "\n";
+	Res << "ID=#" << Id << " Timestamp=" << TimeStampToString(Timestamp)
+			<< "\n";
 	Res << Severity << "\n";
 	Res << Message << "\n";
 	Res << AdditionalData << "\n";
@@ -347,15 +363,14 @@ void RunMonitor()
 }
 
 int BusListen(const char *SendTo, const char *SendMail, const char *PostMail,
-		bool ColorMail,
-		bool TestRun)
+		bool ColorMail, bool TestRun)
 {
 //RunMonitor();
 //Settings
 	FSendTo = strdup(SendTo);
 	FSendMail = strdup(SendMail);
 	FPostMail = strdup(PostMail);
-	FColorMail=ColorMail;
+	FColorMail = ColorMail;
 	FTestRun = TestRun;
 	sd_bus *conn = NULL;
 	sd_bus_slot *slot = NULL;
