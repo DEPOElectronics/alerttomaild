@@ -19,19 +19,21 @@ void WriteHelp()
 }
 
 bool Daemon = false;
-char* SendTo;
-char* SendMail=strdup("msmtp-enqueue.sh");
-char* PostMail=strdup("msmtp-runqueue.sh");
-char* PID_FILE=strdup("/var/run/alerttomaild.pid");
-bool ColorMail=false;
-bool TestRun=false;
+char *SendTo;
+char *SendMail = strdup("msmtp-enqueue.sh");
+char *PostMail = strdup("msmtp-runqueue.sh");
+char *PID_FILE = strdup("/var/run/alerttomaild.pid");
+char *Severity = strdup("Critical");
+bool ColorMail = false;
+bool TestRun = false;
 
-bool strtobool(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-    std::istringstream is(str);
-    bool b;
-    is >> std::boolalpha >> b;
-    return b;
+bool strtobool(std::string str)
+{
+	std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+	std::istringstream is(str);
+	bool b;
+	is >> std::boolalpha >> b;
+	return b;
 }
 
 int LoadConf(const char *Conf)
@@ -52,7 +54,7 @@ int LoadConf(const char *Conf)
 			return RESERROR;
 		}
 
-		char* FSendTo = xget_value(vals, "SendTo");
+		char *FSendTo = xget_value(vals, "SendTo");
 		if (FSendTo == NULL)
 		{
 			printf("SendTo settings not found!\n");
@@ -61,31 +63,37 @@ int LoadConf(const char *Conf)
 		}
 		else
 		{
-			SendTo=strdup(FSendTo);
+			SendTo = strdup(FSendTo);
 		}
 
-		char* SetSendMail=xget_value(vals, "SendMail");
-		if (SetSendMail!=NULL)
+		char *SetSendMail = xget_value(vals, "SendMail");
+		if (SetSendMail != NULL)
 		{
-			SendMail=strdup(SetSendMail);
+			SendMail = strdup(SetSendMail);
 		}
 
-		char* SetPostMail=xget_value(vals, "PostMail");
-		if (SetPostMail!=NULL)
+		char *SetPostMail = xget_value(vals, "PostMail");
+		if (SetPostMail != NULL)
 		{
-			PostMail=strdup(SetPostMail);
+			PostMail = strdup(SetPostMail);
 		}
 
-		char* SetPIDFILE=xget_value(vals, "PID");
-		if (SetPIDFILE!=NULL)
+		char *SetPIDFILE = xget_value(vals, "PID");
+		if (SetPIDFILE != NULL)
 		{
-			PID_FILE=strdup(SetPIDFILE);
+			PID_FILE = strdup(SetPIDFILE);
 		}
 
-		char* SetColor=xget_value(vals, "ColorMail");
-		if (SetColor!=NULL)
+		char *SetSeverity = xget_value(vals, "Severity");
+		if (SetSeverity != NULL)
 		{
-		    ColorMail=strtobool(SetColor);
+			Severity = SetSeverity;
+		}
+
+		char *SetColor = xget_value(vals, "ColorMail");
+		if (SetColor != NULL)
+		{
+			ColorMail = strtobool(SetColor);
 		}
 
 		free(vals);
@@ -107,7 +115,7 @@ int ReadParam(int argc, char **argv)
 	{ "daemon", no_argument, nullptr, 'D' },
 	{ "help", no_argument, nullptr, 'H' },
 	{ "config", required_argument, nullptr, 'C' },
-	{ "test", no_argument, nullptr, 'T'},
+	{ "test", no_argument, nullptr, 'T' },
 	{ 0, 0, 0, 0 } };
 	int c;
 
@@ -130,7 +138,7 @@ int ReadParam(int argc, char **argv)
 			break;
 
 		case 'T':
-			TestRun=true;
+			TestRun = true;
 			break;
 
 		default:
@@ -162,7 +170,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	BusListen(SendTo, SendMail, PostMail, ColorMail, TestRun);
+	BusListen(SendTo, SendMail, PostMail, Severity, ColorMail, TestRun);
 
 	return EXIT_SUCCESS;
 }

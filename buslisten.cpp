@@ -18,6 +18,7 @@ using namespace std;
 const char *FSendTo;
 const char *FSendMail;
 const char *FPostMail;
+const char *FSeverityLevel;
 bool FTestRun;
 bool FColorMail = false;
 
@@ -31,14 +32,14 @@ const char *FILEPATH = strdup("xyz.openbmc_project.Common.FilePath");
 enum TSeverity
 {
 	TS_None,
-	TS_Emergency,
-	TS_Alert,
-	TS_Critical,
-	TS_Error,
-	TS_Warning,
-	TS_Notice,
+	TS_Debug,
 	TS_Informational,
-	TS_Debug
+	TS_Notice,
+	TS_Warning,
+	TS_Error,
+	TS_Critical,
+	TS_Alert,
+	TS_Emergency,
 };
 
 char* HostName()
@@ -134,12 +135,12 @@ string TimeStampToString(uint64_t TimeStamp)
 }
 
 string GetMailText(string SendTo, uint32_t Id, uint64_t Timestamp,
-		const char *Severity, const char *Message, string AdditionalData)
+		string ShSeverity, const char *Message, string AdditionalData)
 {
 	stringstream Res;
-	string ShSeverity = LastWord(Severity);
-	TSeverity SevState = GetSeverity(ShSeverity);
-	string CharState = GetCharState(SevState);
+	TSeverity Severity = GetSeverity(ShSeverity);
+	string CharState = GetCharState(Severity);
+
 	Res << "Subject: " << CharState << " BMC " << HostName() << " "
 			<< ShSeverity << "\n";
 	Res << "To: " << SendTo << "\n";
@@ -249,7 +250,6 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		const char *intf;
 		Res(sd_bus_message_read_basic(m, SD_BUS_TYPE_STRING, &intf),
 				"Read intf");
-		printf("intf=%s\n", intf);
 		if (strcmp(intf, ENTRY) == 0)
 		{
 			Result = LogEntry(m, Id, Timestamp, Severity, Message,
@@ -257,7 +257,6 @@ int GetEventInfo(sd_bus_message *m, uint32_t *Id, uint64_t *Timestamp,
 		}
 		else
 		{
-			printf("intf else\n");
 			if (strcmp(intf, FILEPATH) == 0)
 			{
 				const char *FilePath;
@@ -324,22 +323,52 @@ int PostMail(const char *RunScript)
 	return system(FullRun.c_str());
 }
 
+TSeverity GetSevLevel(const char *SevLevel)
+{
+	static std::unordered_map<std::string, TSeverity> const table =
+	{
+	{ "Critical", TS_Error },
+	{ "Warning", TS_Warning },
+	{ "Ok", TS_Notice } };
+	auto it = table.find(SevLevel);
+	if (it != table.end())
+	{
+		return it->second;
+	}
+	else
+	{
+		return TS_Critical;
+	}
+}
+
+bool NeedSend(TSeverity Severity)
+{
+	TSeverity SevLevel = GetSevLevel(FSeverityLevel);
+	return Severity >= SevLevel;
+}
+
 static int callback(sd_bus_message *m, void *user, sd_bus_error *error)
 {
 	uint32_t Id;
 	uint64_t Timestamp;
-	const char *Severity;
+	const char *FullSeverity;
 	const char *Message;
 	string AdditionalData = "";
-	if (GetEventInfo(m, &Id, &Timestamp, &Severity, &Message, &AdditionalData)
-			== 0)
+	if (GetEventInfo(m, &Id, &Timestamp, &FullSeverity, &Message,
+			&AdditionalData) == 0)
 	{
-		string TxT = GetMailText(FSendTo, Id, Timestamp, Severity, Message,
-				AdditionalData);
-		SendMail(FSendTo, FSendMail, TxT);
-		if (FPostMail != NULL)
+		string ShSeverity = LastWord(FullSeverity);
+		TSeverity RealSeverity = GetSeverity(ShSeverity);
+
+		if (NeedSend(RealSeverity))
 		{
-			PostMail(FPostMail);
+			string TxT = GetMailText(FSendTo, Id, Timestamp, ShSeverity,
+					Message, AdditionalData);
+			SendMail(FSendTo, FSendMail, TxT);
+			if (FPostMail != NULL)
+			{
+				PostMail(FPostMail);
+			}
 		}
 	}
 
@@ -363,13 +392,14 @@ void RunMonitor()
 }
 
 int BusListen(const char *SendTo, const char *SendMail, const char *PostMail,
-		bool ColorMail, bool TestRun)
+		const char *Severity, bool ColorMail, bool TestRun)
 {
 //RunMonitor();
 //Settings
 	FSendTo = strdup(SendTo);
 	FSendMail = strdup(SendMail);
 	FPostMail = strdup(PostMail);
+	FSeverityLevel = strdup(Severity);
 	FColorMail = ColorMail;
 	FTestRun = TestRun;
 	sd_bus *conn = NULL;
