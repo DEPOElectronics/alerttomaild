@@ -7,6 +7,7 @@
 #include <daemon.hpp>
 #include <buslisten.hpp>
 #include <sstream>
+#include <stdio.h>
 
 using namespace std;
 #define RESERROR -1
@@ -29,7 +30,6 @@ bool TestRun = false;
 
 bool strtobool(std::string str)
 {
-	std::transform(str.begin(), str.end(), str.begin(), ::tolower);
 	std::istringstream is(str);
 	bool b;
 	is >> std::boolalpha >> b;
