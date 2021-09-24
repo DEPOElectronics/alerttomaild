@@ -95,7 +95,7 @@ TSeverity GetSeverity(string sSeverity)
 
 }
 
-string GetCharState(TSeverity Severity)
+string GetColorState(TSeverity Severity)
 {
 	if (FColorMail)
 	{
@@ -139,7 +139,7 @@ string GetMailText(string SendTo, uint32_t Id, uint64_t Timestamp,
 {
 	stringstream Res;
 	TSeverity Severity = GetSeverity(ShSeverity);
-	string CharState = GetCharState(Severity);
+	string CharState = GetColorState(Severity);
 
 	Res << "Subject: " << CharState << " BMC " << HostName() << " "
 			<< ShSeverity << "\n";
@@ -148,11 +148,10 @@ string GetMailText(string SendTo, uint32_t Id, uint64_t Timestamp,
 			"utf-8"
 			"\n";
 	Res << "\r\n";
-	Res << "ID=#" << Id << " Timestamp=" << TimeStampToString(Timestamp)
-			<< "\n";
-	Res << Severity << "\n";
-	Res << Message << "\n";
-	Res << AdditionalData << "\n";
+	Res << "ID=#" << Id << " " << TimeStampToString(Timestamp)
+			<< " " <<ShSeverity << "\n";
+	Res << "Description: " << Message << "\n";
+	Res << "Additional data:\n" << AdditionalData << "\n";
 	return Res.str();
 }
 
